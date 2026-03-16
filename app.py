@@ -4,8 +4,9 @@ import sqlite3
 import requests
 from datetime import date
 import io
+import matplotlib.pyplot as plt
 
-# --- 1. CONFIGURATION DU LOGIN ---
+# --- CONFIGURATION LOGIN ---
 UTILISATEUR = "LUN-AGRO"
 MOT_DE_PASSE = "LUNA2023" 
 
@@ -25,7 +26,6 @@ def verifier_connexion():
         return False
     return True
 
-# --- 2. LOGIQUE DE L'APPLICATION ---
 if verifier_connexion():
     st.sidebar.success(f"Connecté : {UTILISATEUR}")
     if st.sidebar.button("Se déconnecter"):
@@ -49,9 +49,9 @@ if verifier_connexion():
         st.info(f"🌤️ **Météo à {VILLE}** : {meteo['temp']}°C | {meteo['hum']}% Humidité")
 
     # --- BASE DE DONNÉES ---
-    conn = sqlite3.connect('ferme_secure.db', check_same_thread=False)
+    conn = sqlite3.connect('ferme_v4.db', check_same_thread=False)
     c = conn.cursor()
-    c.execute('CREATE TABLE IF NOT EXISTS journal (date TEXT, parcelle TEXT, action TEXT, produit TEXT, qte REAL)')
+    c.execute('CREATE TABLE IF NOT EXISTS journal (date TEXT, parcelle TEXT, action TEXT, produit TEXT, qte REAL, cout REAL)')
     conn.commit()
 
     # --- FORMULAIRE ---
@@ -59,29 +59,25 @@ if verifier_connexion():
         st.subheader("📝 Noter un travail")
         col1, col2 = st.columns(2)
         p = col1.text_input("Parcelle")
-        a = col1.selectbox("Action", ["Semis", "Irrigation", "Traitement", "Récolte"])
-        prod = col2.text_input("Produit")
+        a = col1.selectbox("Action", ["Semis", "Irrigation", "Traitement", "Récolte", "Achat Matériel"])
+        prod = col2.text_input("Produit/Matériel")
         qte = col2.number_input("Quantité", min_value=0.0)
+        cout = col2.number_input("Coût total (en devise)", min_value=0.0)
+        
         if st.form_submit_button("Enregistrer"):
-            c.execute("INSERT INTO journal VALUES (?,?,?,?,?)", (date.today(), p, a, prod, qte))
+            c.execute("INSERT INTO journal VALUES (?,?,?,?,?,?)", (date.today().strftime("%Y-%m-%d"), p, a, prod, qte, cout))
             conn.commit()
             st.success("Données enregistrées !")
 
-    # --- HISTORIQUE ET EXPORT EXCEL ---
+    # --- ANALYSE DES DÉPENSES ---
     st.divider()
-    st.subheader("📅 Historique et Export")
-    df = pd.read_sql_query("SELECT * FROM journal ORDER BY date DESC", conn)
-    st.dataframe(df, use_container_width=True)
-
+    st.subheader("📊 Analyse des Dépenses")
+    df = pd.read_sql_query("SELECT * FROM journal", conn)
+    
     if not df.empty:
-        # Préparation du fichier Excel en mémoire
-        buffer = io.BytesIO()
-        with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-            df.to_excel(writer, index=False, sheet_name='Suivi_Agricole')
+        df['date'] = pd.to_datetime(df['date'])
+        # Calcul des dépenses par action
+        depenses_totales = df.groupby('action')['cout'].sum()
         
-        st.download_button(
-            label="📥 Télécharger l'historique en Excel",
-            data=buffer.getvalue(),
-            file_name=f"rapport_agri_{date.today()}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
+        col_g1, col_g2 = st.columns(2)
+        with col_g1
