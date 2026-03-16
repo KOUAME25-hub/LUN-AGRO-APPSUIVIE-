@@ -3,69 +3,75 @@ import pandas as pd
 import sqlite3
 import requests
 from datetime import date
-import io
 
-# --- CONFIGURATION DE LA PAGE ---
-st.set_page_config(page_title="LUN-AGRO PRO", layout="wide", page_icon="📊")
+# --- CONFIGURATION ---
+st.set_page_config(page_title="LUN-AGRO DASHBOARD", layout="wide")
 
-# --- STYLE PERSONNALISÉ (DESIGN) ---
+# Style pour transformer les boutons en grosses cartes
 st.markdown("""
     <style>
-    .main { background-color: #f5f7f9; }
-    .stButton>button { width: 100%; border-radius: 10px; height: 3em; background-color: #007bff; color: white; }
-    .stMetric { background-color: #ffffff; padding: 15px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+    div.stButton > button {
+        height: 120px;
+        font-size: 20px;
+        border-radius: 15px;
+        border: 2px solid #e0e0e0;
+        background-color: white;
+        box-shadow: 2px 2px 10px rgba(0,0,0,0.05);
+    }
+    div.stButton > button:hover {
+        border-color: #2E7D32;
+        color: #2E7D32;
+        background-color: #f0fdf4;
+    }
     </style>
     """, unsafe_allow_html=True)
 
-# --- LOGIN ---
-if "connecte" not in st.session_state: st.session_state["connecte"] = False
+# --- GESTION DE LA NAVIGATION ---
+if "page" not in st.session_state:
+    st.session_state.page = "🏠 Accueil"
 
-if not st.session_state["connecte"]:
-    st.title("🔐 Accès RH & Gestion")
-    user = st.text_input("Identifiant")
-    pw = st.text_input("Mot de passe", type="password")
-    if st.button("SE CONNECTER"):
-        if user == "LUN-AGRO" and pw == "LUNA2023":
-            st.session_state["connecte"] = True
-            st.rerun()
-else:
-    # --- INTERFACE PRO ---
-    st.title("📱 Tableau de Bord LUN-AGRO")
-    
-    # 1. MENU EN ICONES (Comme sur votre photo)
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("📦 Stocks", "Actifs", help="Gestion des ressources")
-    with col2:
-        st.metric("👥 Équipe", "5 Membres", help="Suivi du personnel")
-    with col3:
-        st.metric("📈 Performance", "85%", delta="12%")
+def changer_page(nom):
+    st.session_state.page = nom
 
-    st.divider()
+# --- MENU PAR ICÔNES (SÉLECTIONNABLES) ---
+st.title("🚜 Menu Principal")
+col1, col2, col3, col4 = st.columns(4)
 
-    # 2. PARTIE METEO ET SAISIE
-    c1, c2 = st.columns([1, 2])
-    
+with col1:
+    if st.button("🌱\nProduction"): changer_page("Production")
+with col2:
+    if st.button("💰\nFinances"): changer_page("Finances")
+with col3:
+    if st.button("🌤️\nMétéo"): changer_page("Météo")
+with col4:
+    if st.button("⚙️\nRéglages"): changer_page("Réglages")
+
+st.divider()
+
+# --- AFFICHAGE DU GROUPE SÉLECTIONNÉ ---
+st.subheader(f"Section : {st.session_state.page}")
+
+if st.session_state.page == "Production":
+    c1, c2 = st.columns(2)
     with c1:
-        st.subheader("🌦️ Météo Locale")
-        # Ici le petit module météo simplifié
-        st.info("**Korhogo** : 32°C \n\n Ciel dégagé")
-        
+        st.text_input("Nom de la Parcelle")
+        st.selectbox("Action réalisée", ["Semis", "Récolte", "Traitement"])
     with c2:
-        st.subheader("📝 Nouvelle Entrée")
-        with st.form("main_form"):
-            action = st.selectbox("Type d'activité", ["Recrutement", "Formation", "Suivi Champ", "Dépense"])
-            note = st.text_area("Description")
-            valeur = st.number_input("Montant / Valeur", min_value=0)
-            if st.form_submit_button("ENREGISTRER DANS LE SYSTÈME"):
-                st.success("Donnée enregistrée avec succès !")
+        st.number_input("Quantité (kg)", min_value=0)
+        if st.button("Enregistrer la production"):
+            st.success("Données sauvegardées !")
 
-    # 3. GRAPHIQUE DE PERFORMANCE
-    st.subheader("📊 Analyse des activités")
-    # Simulation de données pour le graphique
-    data = pd.DataFrame({'Jours': ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven'], 'Activités': [10, 15, 8, 22, 18]})
-    st.line_chart(data.set_index('Jours'))
+elif st.session_state.page == "Finances":
+    st.metric("Total des dépenses", "150 000 FCFA", "-5%")
+    st.bar_chart({"Dépenses": [10, 20, 15, 30]})
 
-    if st.sidebar.button("Déconnexion"):
-        st.session_state["connecte"] = False
-        st.rerun()
+elif st.session_state.page == "Météo":
+    st.info("📍 Korhogo, Côte d'Ivoire")
+    st.write("Température : 31°C")
+    st.write("Humidité : 45%")
+    st.warning("Conseil : Arrosage recommandé ce soir.")
+
+elif st.session_state.page == "Réglages":
+    st.write("Modifier votre profil ou mot de passe.")
+    if st.button("Se déconnecter"):
+        st.info("Déconnexion...")
