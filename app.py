@@ -4,56 +4,65 @@ import sqlite3
 import hashlib
 from datetime import date
 
-# --- CONFIGURATION ---
+# Configuration
 st.set_page_config(page_title="LUN-AGRO PRO", layout="wide")
 
-def crypter(mdp):
-    return hashlib.sha256(str.encode(mdp)).hexdigest()
+# Base de données (Nouveau nom pour forcer l'affichage)
+DB_NAME = "lun_agro_v2026.db"
 
-# --- INITIALISATION BASE DE DONNÉES (Version unifiée) ---
-DB_PATH = "lun_agro_final_v1.db" 
-
-def initialiser_db():
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+def init_db():
+    conn = sqlite3.connect(DB_NAME, check_same_thread=False)
     c = conn.cursor()
-    c.execute('CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY, password TEXT, role TEXT)')
-    c.execute('CREATE TABLE IF NOT EXISTS rh (date TEXT, nom TEXT, paie REAL)')
-    c.execute('CREATE TABLE IF NOT EXISTS depenses (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT, categorie TEXT, article TEXT, total REAL)')
-    
-    # Table unique pour tout le cycle de production (Semis, Récolte, Vente)
-    c.execute('''CREATE TABLE IF NOT EXISTS production 
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT, type TEXT, produit TEXT, 
-                  provenance TEXT, superficie TEXT, lieu TEXT, 
-                  qte_rec REAL, dechets REAL, pret_livrer REAL,
-                  montant_vente REAL, mode_paiement TEXT, moyen_paiement TEXT)''')
-    
-    # Table Phytosanitaire
-    c.execute('''CREATE TABLE IF NOT EXISTS phyto 
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT, produit TEXT, cible TEXT, parcelle TEXT, dose TEXT, applicateur TEXT)''')
-
-    c.execute('SELECT COUNT(*) FROM users WHERE username = "admin"')
-    if c.fetchone()[0] == 0:
-        c.execute('INSERT INTO users VALUES (?,?,?)', ("admin", crypter("agri2026"), "Administrateur"))
+    c.execute('CREATE TABLE IF NOT EXISTS production (id INTEGER PRIMARY KEY, date TEXT, type TEXT, produit TEXT, lieu TEXT, montant REAL)')
+    c.execute('CREATE TABLE IF NOT EXISTS phyto (id INTEGER PRIMARY KEY, date TEXT, produit TEXT, parcelle TEXT)')
     conn.commit()
     return conn
 
-conn = initialiser_db()
-c = conn.cursor()
+conn = init_db()
 
-# --- CONNEXION ---
-if "connecte" not in st.session_state: st.session_state.connecte = False
-if not st.session_state.connecte:
-    st.title("🔐 Connexion LUN-AGRO")
-    u, p = st.text_input("Identifiant"), st.text_input("Mot de passe", type="password")
-    if st.button("SE CONNECTER"):
-        c.execute('SELECT password, role FROM users WHERE username = ?', (u,))
-        res = c.fetchone()
-        if res and res[0] == crypter(p):
-            st.session_state.connecte, st.session_state.user_role, st.session_state.username = True, res[1], u
+# Interface
+st.title("🚜 LUN-AGRO PRO")
+
+menu = ["🏠 Accueil", "🌱 Production", "🧪 Phyto", "💰 Finances"]
+choix = st.sidebar.selectbox("Menu", menu)
+
+if choix == "🏠 Accueil":
+    st.write("### Bienvenue dans votre gestionnaire de ferme.")
+    st.info("Sélectionnez une option dans le menu à gauche pour commencer.")
+
+elif choix == "🌱 Production":
+    st.subheader("Enregistrement Semis / Récolte / Vente")
+    with st.form("prod_form"):
+        t = st.selectbox("Type", ["Semé", "Récolte", "Vendu"])
+        p = st.text_input("Produit")
+        l = st.text_input("Parcelle / Abris")
+        m = st.number_input("Montant (si vente)", min_value=0.0)
+        if st.form_submit_button("Enregistrer"):
+            c = conn.cursor()
+            c.execute("INSERT INTO production (date, type, produit, lieu, montant) VALUES (?,?,?,?,?)",
+                      (date.today().strftime("%d/%m/%Y"), t, p, l, m))
+            conn.commit()
+            st.success("Donnée enregistrée !")
+
+    st.write("### Historique")
+    df = pd.read_sql_query("SELECT * FROM production", conn)
+    st.dataframe(df, use_container_width=True)
+
+elif choix == "🧪 Phyto":
+    st.subheader("Traitements Phytosanitaires")
+    with st.form("phyto_form"):
+        prod = st.text_input("Produit utilisé")
+        parc = st.text_input("Parcelle traitée")
+        if st.form_submit_button("Valider"):
+            c = conn.cursor()
+            c.execute("INSERT INTO phyto (date, produit, parcelle) VALUES (?,?,?)",
+                      (date.today().strftime("%d/%m/%Y"), prod, parc))
+            conn.commit()
             st.rerun()
-    st.stop()
+    st.dataframe(pd.read_sql_query("SELECT * FROM phyto", conn), use_container_width=True)
 
-# --- NAVIGATION ---
-if "page" not in st.session_state: st.session_state.page = "Accueil"
-menu = ["Accueil", "Production", "Finances", "Phyto", "RH"]
-cols = st.columns(len(menu))
+elif choix == "💰 Finances":
+    st.subheader("Bilan des Ventes")
+    df = pd.read_sql_query("SELECT SUM(montant) FROM production WHERE type='Vendu'", conn)
+    total = df.iloc[0,0] or 0
+    st.metric("Total des Revenus", f"{total} FCFA")
