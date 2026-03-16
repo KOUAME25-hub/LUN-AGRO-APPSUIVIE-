@@ -6,9 +6,9 @@ from datetime import date
 import io
 import matplotlib.pyplot as plt
 
-# --- CONFIGURATION LOGIN ---
-UTILISATEUR = "LUN-AGRO"
-MOT_DE_PASSE = "LUNA2023" 
+# --- 1. CONFIGURATION LOGIN ---
+UTILISATEUR = "admin"
+MOT_DE_PASSE = "agri2026" 
 
 def verifier_connexion():
     if "connecte" not in st.session_state:
@@ -75,9 +75,21 @@ if verifier_connexion():
     df = pd.read_sql_query("SELECT * FROM journal", conn)
     
     if not df.empty:
-        df['date'] = pd.to_datetime(df['date'])
-        # Calcul des dépenses par action
-        depenses_totales = df.groupby('action')['cout'].sum()
-        
         col_g1, col_g2 = st.columns(2)
-        with col_g1
+        with col_g1:
+            st.write("**Dépenses par activité**")
+            # Graphique simple Streamlit
+            depenses_totales = df.groupby('action')['cout'].sum()
+            st.bar_chart(depenses_totales)
+            
+        with col_g2:
+            st.metric("Total Dépensé", f"{df['cout'].sum()} FCFA")
+            st.write("**Dernières saisies**")
+            st.dataframe(df[['action', 'cout']].tail(3), use_container_width=True)
+
+    # --- EXPORT ---
+    if not df.empty:
+        buffer = io.BytesIO()
+        with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False, sheet_name='Suivi')
+        st.download_button(label="📥 Télécharger l'historique Excel", data=buffer.getvalue(), file_name="rapport_agri.xlsx")
