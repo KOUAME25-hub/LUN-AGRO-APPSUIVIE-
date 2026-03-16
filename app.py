@@ -4,7 +4,7 @@ import sqlite3
 import requests
 from datetime import date
 import io
-import matplotlib.pyplot as plt
+import matplotlib as plt
 
 # --- 1. CONFIGURATION LOGIN ---
 UTILISATEUR = "admin"
