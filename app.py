@@ -4,7 +4,6 @@ import sqlite3
 import requests
 from datetime import date
 import io
-import matplotlib as plt
 
 # --- 1. CONFIGURATION LOGIN ---
 UTILISATEUR = "admin"
@@ -62,30 +61,31 @@ if verifier_connexion():
         a = col1.selectbox("Action", ["Semis", "Irrigation", "Traitement", "Récolte", "Achat Matériel"])
         prod = col2.text_input("Produit/Matériel")
         qte = col2.number_input("Quantité", min_value=0.0)
-        cout = col2.number_input("Coût total (en devise)", min_value=0.0)
+        cout = col2.number_input("Coût total", min_value=0.0)
         
         if st.form_submit_button("Enregistrer"):
             c.execute("INSERT INTO journal VALUES (?,?,?,?,?,?)", (date.today().strftime("%Y-%m-%d"), p, a, prod, qte, cout))
             conn.commit()
             st.success("Données enregistrées !")
 
-    # --- ANALYSE DES DÉPENSES ---
+    # --- ANALYSE DES DÉPENSES (SANS MATPLOTLIB) ---
     st.divider()
     st.subheader("📊 Analyse des Dépenses")
     df = pd.read_sql_query("SELECT * FROM journal", conn)
     
     if not df.empty:
-        col_g1, col_g2 = st.columns(2)
-        with col_g1:
-            st.write("**Dépenses par activité**")
-            # Graphique simple Streamlit
-            depenses_totales = df.groupby('action')['cout'].sum()
-            st.bar_chart(depenses_totales)
+        # Calcul du total par action
+        stats = df.groupby('action')['cout'].sum()
+        
+        c1, c2 = st.columns([2, 1])
+        with c1:
+            st.write("**Dépenses par catégorie**")
+            st.bar_chart(stats) # Graphique intégré, pas besoin de module externe !
             
-        with col_g2:
-            st.metric("Total Dépensé", f"{df['cout'].sum()} FCFA")
-            st.write("**Dernières saisies**")
-            st.dataframe(df[['action', 'cout']].tail(3), use_container_width=True)
+        with c2:
+            st.metric("Total Général", f"{df['cout'].sum()} FCFA")
+            st.write("**Dernières activités**")
+            st.table(df[['action', 'cout']].tail(3))
 
     # --- EXPORT ---
     if not df.empty:
