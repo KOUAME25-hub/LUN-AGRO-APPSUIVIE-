@@ -7,19 +7,16 @@ from datetime import date
 # --- CONFIGURATION ---
 st.set_page_config(page_title="LUN-AGRO PRO", layout="wide")
 
-# Fonction pour crypter les mots de passe (plus sécurisé)
 def crypter(mdp):
     return hashlib.sha256(str.encode(mdp)).hexdigest()
 
 # --- BASE DE DONNÉES ---
-conn = sqlite3.connect('ferme_v6.db', check_same_thread=False)
+conn = sqlite3.connect('ferme_v7.db', check_same_thread=False)
 c = conn.cursor()
-# Table des utilisateurs (Admin par défaut créé au lancement)
 c.execute('CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY, password TEXT, role TEXT)')
-# Création du compte Admin principal s'il n'existe pas
+# Création Admin par défaut
 admin_pwd = crypter("agri2026")
 c.execute('INSERT OR IGNORE INTO users VALUES (?,?,?)', ("admin", admin_pwd, "Administrateur"))
-# Table RH
 c.execute('CREATE TABLE IF NOT EXISTS rh (date TEXT, nom TEXT, poste TEXT, salaire REAL)')
 conn.commit()
 
@@ -52,61 +49,67 @@ st.markdown("""<style> div.stButton > button { height: 80px; border-radius: 12px
 
 if "page" not in st.session_state: st.session_state.page = "🏠 Accueil"
 
-# Barre de navigation (Menu par icônes)
-col1, col2, col3, col4, col5 = st.columns(5)
-with col1: 
+# --- BARRE DE NAVIGATION DYNAMIQUE ---
+# On définit les colonnes selon le rôle
+if st.session_state.user_role == "Administrateur":
+    cols = st.columns(5) # 5 icônes pour l'Admin
+else:
+    cols = st.columns(3) # Seulement 3 icônes pour les autres
+
+with cols[0]:
     if st.button("🏠\nAccueil"): st.session_state.page = "Accueil"
-with col2: 
+with cols[1]:
     if st.button("🌱\nProduction"): st.session_state.page = "Production"
-with col3: 
+with cols[2]:
     if st.button("💰\nFinances"): st.session_state.page = "Finances"
-with col4: 
-    if st.button("👥\nRH"): st.session_state.page = "RH"
-with col5: 
-    if st.button("⚙️\nRéglages"): st.session_state.page = "Réglages"
+
+# SECTIONS RÉSERVÉES À L'ADMINISTRATEUR (RH et Réglages)
+if st.session_state.user_role == "Administrateur":
+    with cols[3]:
+        if st.button("👥\nRH"): st.session_state.page = "RH"
+    with cols[4]:
+        if st.button("⚙️\nRéglages"): st.session_state.page = "Réglages"
 
 st.divider()
 
 # --- GESTION DES PAGES ---
 
-if st.session_state.page == "RH":
-    st.subheader("👥 Gestion RH")
-    # Formulaire RH classique...
+if st.session_state.page == "Accueil":
+    st.subheader(f"Bienvenue, {st.session_state.username}")
+    st.info(f"Votre rôle : {st.session_state.user_role}")
+
+elif st.session_state.page == "RH" and st.session_state.user_role == "Administrateur":
+    st.subheader("👥 Gestion RH (Admin Uniquement)")
+    # Formulaire RH...
     with st.form("rh_form"):
         nom = st.text_input("Nom de l'ouvrier")
         paie = st.number_input("Salaire", min_value=0)
         if st.form_submit_button("Enregistrer"):
             c.execute("INSERT INTO rh VALUES (?,?,?,?)", (date.today(), nom, "Ouvrier", paie))
             conn.commit()
-            st.success("Enregistré")
+            st.success("Payement enregistré")
 
-elif st.session_state.page == "Réglages":
-    st.subheader("⚙️ Paramètres du système")
+elif st.session_state.page == "Réglages" and st.session_state.user_role == "Administrateur":
+    st.subheader("⚙️ Paramètres & Création de comptes")
+    with st.form("creer_compte"):
+        new_user = st.text_input("Nouvel Identifiant")
+        new_pw = st.text_input("Mot de passe", type="password")
+        if st.form_submit_button("CRÉER COMPTE UTILISATEUR"):
+            try:
+                c.execute('INSERT INTO users VALUES (?,?,?)', (new_user, crypter(new_pw), "Utilisateur"))
+                conn.commit()
+                st.success(f"Compte '{new_user}' créé avec succès !")
+            except: st.error("Erreur ou identifiant déjà pris.")
     
-    # --- SECTION RÉSERVÉE À L'ADMINISTRATEUR ---
-    if st.session_state.user_role == "Administrateur":
-        st.write("---")
-        st.markdown("### 👤 Créer un nouveau compte utilisateur")
-        st.info("En tant qu'Admin, vous seul voyez cette section.")
-        
-        with st.form("creer_compte"):
-            new_user = st.text_input("Nouvel Identifiant")
-            new_pw = st.text_input("Mot de passe", type="password")
-            new_role = st.selectbox("Niveau d'accès", ["Utilisateur", "Administrateur"])
-            
-            if st.form_submit_button("CRÉER LE COMPTE"):
-                if new_user and new_pw:
-                    try:
-                        c.execute('INSERT INTO users VALUES (?,?,?)', (new_user, crypter(new_pw), new_role))
-                        conn.commit()
-                        st.success(f"Compte créé pour {new_user} !")
-                    except:
-                        st.error("Cet identifiant existe déjà.")
-                else:
-                    st.warning("Veuillez remplir tous les champs.")
-    else:
-        st.warning("Accès restreint : Seul l'Administrateur peut créer des comptes.")
-
     if st.button("Se déconnecter"):
         st.session_state.connecte = False
         st.rerun()
+
+elif st.session_state.page in ["Production", "Finances"]:
+    st.subheader(f"Section {st.session_state.page}")
+    st.write("Interface de saisie pour le personnel...")
+
+# Sécurité : Si un simple utilisateur essaie de forcer l'accès aux pages Admin
+if st.session_state.page in ["RH", "Réglages"] and st.session_state.user_role != "Administrateur":
+    st.session_state.page = "Accueil"
+    st.rerun()
