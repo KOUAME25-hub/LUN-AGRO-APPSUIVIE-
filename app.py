@@ -25,7 +25,7 @@ if not st.session_state["connecte"]:
     user = st.text_input("Identifiant")
     pw = st.text_input("Mot de passe", type="password")
     if st.button("SE CONNECTER"):
-        if user == "admin" and pw == "agri2026":
+        if user == "LUN-AGRO" and pw == "LUNA2023":
             st.session_state["connecte"] = True
             st.rerun()
 else:
