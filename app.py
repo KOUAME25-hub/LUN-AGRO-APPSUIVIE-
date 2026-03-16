@@ -6,8 +6,8 @@ from datetime import date
 
 # --- 1. CONFIGURATION DE LA SÉCURITÉ ---
 # Vous pouvez changer le mot de passe ici (entre les guillemets)
-UTILISATEUR = "admin"
-MOT_DE_PASSE = "agri2026" 
+UTILISATEUR = "LUN-AGRO"
+MOT_DE_PASSE = "LUNA2023" 
 
 def verifier_connexion():
     if "connecte" not in st.session_state:
