@@ -6,8 +6,8 @@ from datetime import date
 import io
 
 # --- 1. CONFIGURATION LOGIN ---
-UTILISATEUR = "admin"
-MOT_DE_PASSE = "agri2026" 
+UTILISATEUR = "LUN-AGRO"
+MOT_DE_PASSE = "LUNA2023" 
 
 def verifier_connexion():
     if "connecte" not in st.session_state:
