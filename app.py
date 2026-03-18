@@ -11,21 +11,16 @@ st.set_page_config(page_title="LUN-AGRO PRO", layout="wide")
 def crypter(mdp):
     return hashlib.sha256(str.encode(mdp)).hexdigest()
 
-# --- BASE DE DONNÉES ---
+# --- INITIALISATION BASE DE DONNÉES ---
 DB_PATH = "data_ferme_permanente.db"
 
 def initialiser_db():
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     c = conn.cursor()
     c.execute('CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY, password TEXT, role TEXT)')
-    c.execute('''CREATE TABLE IF NOT EXISTS rh_personnel 
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, nom TEXT, poste TEXT, salaire_base REAL)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS rh_paie 
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, nom TEXT, mois TEXT, montant_verse REAL, date_p TEXT)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS stocks 
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, article TEXT, quantite REAL, unite TEXT)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS production 
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT, produit TEXT, montant REAL)''')
+    c.execute('CREATE TABLE IF NOT EXISTS rh_personnel (id INTEGER PRIMARY KEY AUTOINCREMENT, nom TEXT, salaire REAL)')
+    c.execute('CREATE TABLE IF NOT EXISTS rh_paie (id INTEGER PRIMARY KEY AUTOINCREMENT, nom TEXT, montant REAL, date_p TEXT)')
+    c.execute('CREATE TABLE IF NOT EXISTS stocks (id INTEGER PRIMARY KEY AUTOINCREMENT, article TEXT, quantite REAL, unite TEXT)')
     
     c.execute('SELECT COUNT(*) FROM users WHERE username = "admin"')
     if c.fetchone()[0] == 0:
@@ -36,8 +31,10 @@ def initialiser_db():
 conn = initialiser_db()
 cursor = conn.cursor()
 
-# --- CONNEXION ---
-if "connecte" not in st.session_state: st.session_state.connecte = False
+# --- AUTHENTIFICATION ---
+if "connecte" not in st.session_state:
+    st.session_state.connecte = False
+
 if not st.session_state.connecte:
     st.title("🔐 Connexion LUN-AGRO")
     u = st.text_input("Identifiant")
@@ -52,85 +49,49 @@ if not st.session_state.connecte:
 
 # --- NAVIGATION ---
 if "page" not in st.session_state: st.session_state.page = "Accueil"
-n_cols = 5 if st.session_state.user_role == "Administrateur" else 3
-cols = st.columns(n_cols)
+menu_items = {"🏠 Accueil": "Accueil", "🌱 Production": "Production", "💰 Finances": "Finances"}
 
-with cols[0]:
-    if st.button("🏠 Accueil", use_container_width=True): st.session_state.page = "Accueil"
-with cols[1]:
-    if st.button("🌱 Production", use_container_width=True): st.session_state.page = "Production"
-with cols[2]:
-    if st.button("💰 Finances", use_container_width=True): st.session_state.page = "Finances"
 if st.session_state.user_role == "Administrateur":
-    with cols[3]:
-        if st.button("👥 RH", use_container_width=True): st.session_state.page = "RH"
-    with cols[4]:
-        if st.button("⚙️ Réglages", use_container_width=True): st.session_state.page = "Réglages"
+    menu_items["👥 RH"] = "RH"
+    menu_items["⚙️ Réglages"] = "Réglages"
+
+# Utilisation d'une boucle corrigée (Solution Photo 2)
+cols = st.columns(len(menu_items))
+for i, (label, target) in enumerate(menu_items.items()):
+    if cols[i].button(label, use_container_width=True): # Solution Photo 1 (Parenthèse fermée)
+        st.session_state.page = target # Solution Photo 4 (Indentation correcte)
 
 st.divider()
 
-# --- PAGE PRODUCTION (AVEC STOCKS) ---
-if st.session_state.page == "Production":
-    st.title("🌱 Gestion de la Production & Stocks")
-    t_prod, t_stock = st.tabs(["📊 Suivi Production", "📦 Stock Engrais/Phyto"])
+# --- LOGIQUE RH & PDF ---
+if st.session_state.page == "RH":
+    st.title("👥 Gestion RH")
+    nom = st.text_input("Nom de l'employé")
+    sal = st.number_input("Montant Salaire (FCFA)", min_value=0)
     
-    with t_prod:
-        with st.form("f_prod"):
-            prod = st.text_input("Produit récolté")
-            m_v = st.number_input("Valeur estimée (FCFA)", min_value=0)
-            if st.form_submit_button("Enregistrer récolte"):
-                cursor.execute("INSERT INTO production (date, produit, montant) VALUES (?,?,?)", 
-                             (date.today().strftime("%d/%m/%Y"), prod, m_v))
-                conn.commit(); st.success("Production enregistrée")
-
-    with t_stock:
-        col_s1, col_s2 = st.columns([1, 2])
-        with col_s1:
-            st.subheader("Mise à jour")
-            with st.form("f_stock"):
-                art = st.selectbox("Article", ["Urée", "NPK", "Herbicide", "Fongicide", "Sacs"])
-                qte = st.number_input("Quantité", min_value=0.0)
-                unit = st.selectbox("Unité", ["Sacs", "Litres", "Kg"])
-                if st.form_submit_button("Actualiser le stock"):
-                    cursor.execute("INSERT INTO stocks (article, quantite, unite) VALUES (?,?,?)", (art, qte, unit))
-                    conn.commit(); st.success("Stock mis à jour")
-        with col_s2:
-            st.subheader("État actuel des stocks")
-            df_s = pd.read_sql_query("SELECT article, SUM(quantite) as Total, unite FROM stocks GROUP BY article", conn)
-            st.table(df_s)
-
-# --- PAGE RH (AVEC PDF) ---
-elif st.session_state.page == "RH":
-    st.title("👥 Ressources Humaines")
-    t_rh1, t_rh2 = st.tabs(["➕ Nouveau Personnel", "📄 Bulletins de Paie"])
-    
-    with t_rh1:
-        with st.form("f_rh"):
-            nom_e = st.text_input("Nom de l'employé")
-            sal_e = st.number_input("Salaire Mensuel (FCFA)", min_value=0)
-            if st.form_submit_button("Ajouter"):
-                cursor.execute("INSERT INTO rh_personnel (nom, salaire_base) VALUES (?,?)", (nom_e, sal_e))
-                cursor.execute("INSERT INTO rh_paie (nom, mois, montant_verse, date_p) VALUES (?,?,?,?)", 
-                             (nom_e, "Mars", sal_e, date.today().strftime("%d/%m/%Y")))
-                conn.commit(); st.success("Employé ajouté")
-
-    with t_rh2:
-        df_h = pd.read_sql_query("SELECT * FROM rh_paie", conn)
-        for i, r in df_h.iterrows():
-            c1, c2 = st.columns([3, 1])
-            c1.write(f"Bulletin : **{r['nom']}** ({r['montant_verse']} FCFA)")
+    if st.button("Enregistrer & Générer Fiche"):
+        if nom and sal > 0:
+            date_jour = date.today().strftime("%d/%m/%Y")
+            cursor.execute("INSERT INTO rh_paie (nom, montant, date_p) VALUES (?,?,?)", (nom, sal, date_jour))
+            conn.commit()
             
+            # Génération PDF propre
             pdf = FPDF()
             pdf.add_page()
             pdf.set_font("Arial", "B", 16)
-            pdf.cell(200, 10, "LUN-AGRO PRO - KORHOGO", ln=True, align="C")
-            pdf.set_font("Arial", "", 12)
+            pdf.cell(200, 10, "LUN-AGRO PRO - BULLETIN DE PAIE", ln=True, align="C")
             pdf.ln(10)
-            pdf.cell(200, 10, f"Employé : {r['nom']}", ln=True)
-            pdf.cell(200, 10, f"Salaire Net : {r['montant_verse']} FCFA", ln=True)
-            pdf.cell(200, 10, f"Date de paiement : {r['date_p']}", ln=True)
+            pdf.set_font("Arial", "", 12)
+            pdf.cell(200, 10, f"Employé : {nom}", ln=True)
+            pdf.cell(200, 10, f"Montant : {sal} FCFA", ln=True)
+            pdf.cell(200, 10, f"Date de paiement : {date_jour}", ln=True)
             
-            c2.download_button("📥 PDF", pdf.output(dest='S'), f"Paie_{r['nom']}.pdf", key=f"p_{i}")
+            st.success("Données enregistrées !")
+            st.download_button("📥 Télécharger le PDF", pdf.output(dest='S'), f"Paie_{nom}.pdf", "application/pdf")
 
 elif st.session_state.page == "Accueil":
-    st.info(f"Session : {st.session_state.username} | Korhogo, Côte d'Ivoire")
+    st.info(f"Bienvenue {st.session_state.username} | Ville : Korhogo")
+
+if st.sidebar.button("🚪 Déconnexion"):
+    st.session_state.connecte = False
+    st.rerun()
