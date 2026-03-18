@@ -1,4 +1,4 @@
-import streamlit as st  # Corrigé : 'import' en minuscule
+import streamlit as st
 import pandas as pd
 import sqlite3
 from datetime import date
@@ -18,14 +18,14 @@ def init_db():
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT, type TEXT, produit TEXT, 
                   provenance TEXT, superficie TEXT, lieu TEXT, qte_rec REAL, dechets REAL, 
                   qte_livrable REAL, montant REAL, mode_paiement TEXT)''')
-    # Table Phyto (Détaillée)
+    # Table Phyto
     c.execute('''CREATE TABLE IF NOT EXISTS phyto 
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT, produit TEXT, cible TEXT, 
                   parcelle TEXT, dose TEXT, applicateur TEXT)''')
     # Table Agenda
     c.execute('''CREATE TABLE IF NOT EXISTS agenda 
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT, tache TEXT, responsable TEXT, statut TEXT)''')
-    # Table Formation / Stagiaires
+    # Table Formation
     c.execute('''CREATE TABLE IF NOT EXISTS formation 
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT, nom_stagiaire TEXT, ecole TEXT, theme TEXT)''')
     conn.commit()
@@ -33,14 +33,14 @@ def init_db():
 
 conn = init_db()
 
-# --- BARRE LATÉRALE ---
+# --- MENU LATÉRAL ---
 st.sidebar.title("🍀 LUN-AGRO PRO")
 st.sidebar.write("---")
 
 if "page" not in st.session_state:
     st.session_state.page = "Accueil"
 
-# Navigation
+# Navigation par boutons individuels (Plus stable)
 if st.sidebar.button("🏠 Accueil", use_container_width=True): st.session_state.page = "Accueil"
 if st.sidebar.button("📅 Agenda", use_container_width=True): st.session_state.page = "Agenda"
 if st.sidebar.button("🌱 Production", use_container_width=True): st.session_state.page = "Production"
@@ -53,122 +53,106 @@ if st.sidebar.button("☁️ Météo", use_container_width=True): st.session_sta
 
 # 1. ACCUEIL
 if st.session_state.page == "Accueil":
-    st.title("🚜 LUN-AGRO PRO - Korhogo")
-    st.success("Bienvenue dans votre système de gestion intégrée.")
-    st.info("Utilisez le menu à gauche pour enregistrer vos activités.")
+    st.title("🚜 Bienvenue sur LUN-AGRO PRO")
+    st.success("Votre centre de gestion agricole à Korhogo est prêt.")
+    st.info("Cliquez sur les menus à gauche pour commencer l'enregistrement.")
 
 # 2. AGENDA
 elif st.session_state.page == "Agenda":
-    st.title("📅 Planning des Travaux")
+    st.title("📅 Agenda & Travaux")
     with st.form("f_age"):
-        t = st.text_input("Tâche à accomplir")
+        t = st.text_input("Travail à effectuer")
         r = st.text_input("Responsable")
-        if st.form_submit_button("Ajouter au planning"):
+        if st.form_submit_button("Ajouter"):
             conn.execute("INSERT INTO agenda (date, tache, responsable, statut) VALUES (?,?,?,?)",
                          (date.today().strftime("%d/%m/%Y"), t, r, "En cours"))
-            conn.commit()
-            st.rerun()
+            conn.commit(); st.rerun()
+    st.write("### Travaux en cours")
     st.dataframe(pd.read_sql_query("SELECT * FROM agenda ORDER BY id DESC", conn), use_container_width=True)
 
-# 3. PRODUCTION (Onglets détaillés)
+# 3. PRODUCTION (Réglages détaillés rétablis)
 elif st.session_state.page == "Production":
-    st.title("🌱 Suivi de Production")
-    t1, t2, t3 = st.tabs(["🆕 Semis", "🧺 Récolte", "💵 Vente"])
+    st.title("🌱 Suivi de la Production")
+    tab1, tab2, tab3 = st.tabs(["🆕 Semis", "🧺 Récolte", "💵 Vente"])
     
-    with t1:
-        with st.form("f_semis"):
+    with tab1:
+        with st.form("f_sem"):
             c1, c2 = st.columns(2)
             p = c1.text_input("Produit")
             s = c2.text_input("Superficie")
-            prov = c1.text_input("Provenance semence")
+            prov = c1.text_input("Provenance semences")
             if st.form_submit_button("Enregistrer Semis"):
                 conn.execute("INSERT INTO production (date, type, produit, superficie, provenance) VALUES (?,?,?,?,?)",
                              (date.today().strftime("%d/%m/%Y"), "Semis", p, s, prov))
-                conn.commit(); st.success("Semis enregistré")
+                conn.commit(); st.success("Semis enregistré !")
 
-    with t2:
-        with st.form("f_recolte"):
+    with tab2:
+        with st.form("f_rec"):
             c1, c2 = st.columns(2)
             p_r = c1.text_input("Produit récolté")
-            q_r = c2.number_input("Quantité totale", min_value=0.0)
-            dech = c1.number_input("Déchets (kg/unités)", min_value=0.0)
+            q_r = c2.number_input("Quantité récoltée", min_value=0.0)
+            dech = c1.number_input("Pertes/Déchets", min_value=0.0)
             if st.form_submit_button("Enregistrer Récolte"):
                 conn.execute("INSERT INTO production (date, type, produit, qte_rec, dechets, qte_livrable) VALUES (?,?,?,?,?,?)",
                              (date.today().strftime("%d/%m/%Y"), "Récolte", p_r, q_r, dech, q_r-dech))
-                conn.commit(); st.success("Récolte enregistrée")
+                conn.commit(); st.success("Récolte enregistrée !")
 
-    with t3:
-        with st.form("f_vente"):
+    with tab3:
+        with st.form("f_ven"):
             c1, c2 = st.columns(2)
             p_v = c1.text_input("Produit vendu")
             m = c2.number_input("Montant (FCFA)", min_value=0.0)
-            mode = st.selectbox("Paiement", ["Cash", "Mobile Money", "Crédit"])
-            if st.form_submit_button("Enregistrer Vente"):
-                conn.execute("INSERT INTO production (date, type, produit, montant, mode_paiement) VALUES (?,?,?,?,?)",
-                             (date.today().strftime("%d/%m/%Y"), "Vente", p_v, m, mode))
-                conn.commit(); st.success("Vente enregistrée")
+            if st.form_submit_button("Valider Vente"):
+                conn.execute("INSERT INTO production (date, type, produit, montant) VALUES (?,?,?,?)",
+                             (date.today().strftime("%d/%m/%Y"), "Vente", p_v, m))
+                conn.commit(); st.success("Vente enregistrée !")
 
 # 4. PHYTO
 elif st.session_state.page == "Phyto":
-    st.title("🧪 Gestion Phytosanitaire")
+    st.title("🧪 Traitements Phytosanitaires")
     with st.form("f_phy"):
-        c1, c2 = st.columns(2)
-        prod = c1.text_input("Nom du produit")
-        cib = c2.text_input("Cible (Ravageur)")
-        dos = c1.text_input("Dose")
+        p = st.text_input("Produit utilisé")
+        c = st.text_input("Cible (Ravageur)")
         if st.form_submit_button("Enregistrer"):
-            conn.execute("INSERT INTO phyto (date, produit, cible, dose) VALUES (?,?,?,?)",
-                         (date.today().strftime("%d/%m/%Y"), prod, cib, dos))
-            conn.commit(); st.rerun()
-    st.dataframe(pd.read_sql_query("SELECT * FROM phyto", conn))
+            conn.execute("INSERT INTO phyto (date, produit, cible) VALUES (?,?,?)",
+                         (date.today().strftime("%d/%m/%Y"), p, c))
+            conn.commit(); st.success("Traitement enregistré !")
 
 # 5. FINANCES
 elif st.session_state.page == "Finances":
-    st.title("💰 État des Finances")
-    rev = pd.read_sql_query("SELECT SUM(montant) FROM production WHERE type='Vente'", conn).iloc[0,0] or 0
-    st.metric("Total des Revenus", f"{rev:,.0f} FCFA")
-    st.write("### Détail des ventes")
-    st.dataframe(pd.read_sql_query("SELECT date, produit, montant, mode_paiement FROM production WHERE type='Vente'", conn))
+    st.title("💰 Suivi Financier")
+    total = pd.read_sql_query("SELECT SUM(montant) FROM production WHERE type='Vente'", conn).iloc[0,0] or 0
+    st.metric("Total des Revenus", f"{total:,.0f} FCFA")
+    st.dataframe(pd.read_sql_query("SELECT date, produit, montant FROM production WHERE type='Vente'", conn))
 
 # 6. FORMATION (Bibliothèques & Stagiaires)
 elif st.session_state.page == "Formation":
-    st.title("📚 Centre de Formation Agricole")
+    st.title("📚 Centre de Formation")
+    v_tab, p_tab, s_tab = st.tabs(["🎥 Vidéos", "📖 Bibliothèque Physique", "🧑‍🎓 Stagiaires"])
     
-    sub_tab1, sub_tab2, sub_tab3 = st.tabs(["🎥 Bibliothèque Vidéo", "📖 Bibliothèque Physique", "🧑‍🎓 Stagiaires"])
-    
-    with sub_tab1:
-        cat = st.selectbox("Choisir un thème agricole :", [
-            "Produits phytosanitaires", "Gestion agricole", 
-            "Économie agricole", "Technologies agricoles", 
-            "Rédaction de rapport de stage"
-        ])
+    with v_tab:
+        cat = st.selectbox("Thème :", ["Produits phytosanitaires", "Gestion agricole", "Économie agricole", "Technologies agricoles", "Rédaction de rapport de stage"])
         links = {
-            "Produits phytosanitaires": "https://www.youtube.com/watch?v=FjC6F-GIsdY",
-            "Gestion agricole": "https://www.youtube.com/watch?v=kY97_iX2P-w",
+            "Produits phytosanitaires": "https://www.youtube.com/watch?v=kY97_iX2P-w",
+            "Gestion agricole": "https://www.youtube.com/watch?v=FjC6F-GIsdY",
             "Économie agricole": "https://www.youtube.com/watch?v=YmXAn2OInm8",
             "Technologies agricoles": "https://www.youtube.com/watch?v=q6bKId6-E-0",
             "Rédaction de rapport de stage": "https://www.youtube.com/watch?v=q0-N64G3rIs"
         }
         st.video(links[cat])
 
-    with sub_tab2:
-        st.subheader("📚 Bibliothèque Physique (Bureau)")
-        st.write("- Manuel de protection des cultures\n- Guide de l'agriculteur moderne\n- Comptabilité agricole simplifiée")
+    with p_tab:
+        st.info("Ouvrages disponibles au bureau de la ferme.")
+        st.write("- Manuel Phytosanitaire\n- Guide de Gestion Agricole")
 
-    with sub_tab3:
-        st.subheader("🎓 Suivi des Stagiaires")
+    with s_tab:
+        st.subheader("🎓 Inscription Stagiaire")
         with st.form("f_stag"):
-            nom = st.text_input("Nom du stagiaire")
+            nom = st.text_input("Nom")
             ecole = st.text_input("École")
-            if st.form_submit_button("Inscrire"):
-                conn.execute("INSERT INTO formation (date, nom_stagiaire, ecole) VALUES (?,?,?)",
-                             (date.today().strftime("%d/%m/%Y"), nom, ecole))
-                conn.commit(); st.success("Inscrit !")
-        
-        st.divider()
-        if st.button("🎓 Générer Attestation (Visuel)"):
-            st.balloons()
-            st.success("Attestation générée avec succès !")
+            if st.form_submit_button("Enregistrer"):
+                conn.execute("INSERT INTO formation (date, nom_stagiaire, ecole) VALUES (?,?,?)", (date.today().strftime("%d/%m/%Y"), nom, ecole))
+                conn.commit(); st.success("Stagiaire ajouté !")
 
 # 7. MÉTÉO
 elif st.session_state.page == "Météo":
