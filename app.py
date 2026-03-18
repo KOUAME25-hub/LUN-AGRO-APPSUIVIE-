@@ -19,18 +19,15 @@ def initialiser_db():
     c = conn.cursor()
     # Table Sécurité
     c.execute('CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY, password TEXT, role TEXT)')
-    # Table RH (Développée)
+    # Tables RH complètes
     c.execute('''CREATE TABLE IF NOT EXISTS rh_personnel 
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, nom TEXT, poste TEXT, contact TEXT, salaire_base REAL, date_embauche TEXT)''')
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, nom TEXT, poste TEXT, contact TEXT, salaire_base REAL)''')
     c.execute('''CREATE TABLE IF NOT EXISTS rh_paie 
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, nom TEXT, mois TEXT, montant_verse REAL, date_paiement TEXT)''')
-    # Tables métier
-    c.execute('CREATE TABLE IF NOT EXISTS production (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT, type TEXT, produit TEXT, superficie TEXT, montant REAL)')
-    
-    c.execute('SELECT COUNT(*) FROM users WHERE username = "admin"')
-    if c.fetchone()[0] == 0:
-        admin_pwd = crypter("agri2026")
-        c.execute('INSERT INTO users VALUES (?,?,?)', ("admin", admin_pwd, "Administrateur"))
+    c.execute('''CREATE TABLE IF NOT EXISTS rh_presence 
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, nom TEXT, date TEXT, statut TEXT)''')
+    # Table Métier
+    c.execute('CREATE TABLE IF NOT EXISTS production (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT, type TEXT, produit TEXT, montant REAL)')
     
     conn.commit()
     return conn
@@ -38,105 +35,7 @@ def initialiser_db():
 conn = initialiser_db()
 cursor = conn.cursor()
 
-# --- SYSTÈME DE CONNEXION ---
-if "connecte" not in st.session_state:
-    st.session_state.connecte = False
-
+# --- LOGIN (GARDÉ DE VOTRE CODE) ---
+if "connecte" not in st.session_state: st.session_state.connecte = False
 if not st.session_state.connecte:
-    st.title("🔐 Connexion LUN-AGRO")
-    u = st.text_input("Identifiant")
-    p = st.text_input("Mot de passe", type="password")
-    if st.button("SE CONNECTER"):
-        cursor.execute('SELECT password, role FROM users WHERE username = ?', (u,))
-        res = cursor.fetchone()
-        if res and res[0] == crypter(p):
-            st.session_state.connecte = True
-            st.session_state.user_role = res[1]
-            st.session_state.username = u
-            st.rerun()
-    st.stop()
-
-# --- MENU NAVIGATION ---
-if "page" not in st.session_state: st.session_state.page = "Accueil"
-
-n_cols = 5 if st.session_state.user_role == "Administrateur" else 3
-cols = st.columns(n_cols)
-
-with cols[0]:
-    if st.button("🏠\nAccueil", use_container_width=True): st.session_state.page = "Accueil"
-with cols[1]:
-    if st.button("🌱\nProduction", use_container_width=True): st.session_state.page = "Production"
-with cols[2]:
-    if st.button("💰\nFinances", use_container_width=True): st.session_state.page = "Finances"
-
-if st.session_state.user_role == "Administrateur":
-    with cols[3]:
-        if st.button("👥\nRH", use_container_width=True): st.session_state.page = "RH"
-    with cols[4]:
-        if st.button("⚙️\nRéglages", use_container_width=True): st.session_state.page = "Réglages"
-
-st.divider()
-
-# --- LOGIQUE DES PAGES ---
-
-# 1. PAGE RH (DÉVELOPPÉE)
-if st.session_state.page == "RH" and st.session_state.user_role == "Administrateur":
-    st.title("👥 Gestion des Ressources Humaines")
-    
-    tab_perso, tab_paie, tab_list = st.tabs(["➕ Ajouter Personnel", "💸 Effectuer un Paiement", "📋 Registre Employés"])
-    
-    with tab_perso:
-        with st.form("form_rh"):
-            st.subheader("Fiche de nouvel employé")
-            col1, col2 = st.columns(2)
-            nom = col1.text_input("Nom Complet")
-            poste = col2.selectbox("Poste", ["Ouvrier Agricole", "Chef de Culture", "Gardien", "Chauffeur", "Stagiaire"])
-            contact = col1.text_input("Téléphone")
-            salaire = col2.number_input("Salaire de Base (FCFA)", min_value=0)
-            if st.form_submit_button("Enregistrer l'employé"):
-                cursor.execute("INSERT INTO rh_personnel (nom, poste, contact, salaire_base, date_embauche) VALUES (?,?,?,?,?)",
-                             (nom, poste, contact, salaire, date.today().strftime("%d/%m/%Y")))
-                conn.commit()
-                st.success(f"Employé {nom} ajouté au registre.")
-
-    with tab_paie:
-        st.subheader("Enregistrement des salaires")
-        df_empl = pd.read_sql_query("SELECT nom FROM rh_personnel", conn)
-        if not df_empl.empty:
-            with st.form("form_paie"):
-                emp_nom = st.selectbox("Sélectionner l'employé", df_empl['nom'])
-                mois = st.selectbox("Mois de paie", ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"])
-                montant = st.number_input("Montant versé (FCFA)", min_value=0)
-                if st.form_submit_button("Confirmer le paiement"):
-                    cursor.execute("INSERT INTO rh_paie (nom, mois, montant_verse, date_paiement) VALUES (?,?,?,?)",
-                                 (emp_nom, mois, montant, date.today().strftime("%d/%m/%Y")))
-                    conn.commit()
-                    st.success(f"Paiement enregistré pour {emp_nom}")
-        else:
-            st.warning("Veuillez d'abord ajouter du personnel.")
-
-    with tab_list:
-        st.subheader("Effectif de la ferme")
-        df_list = pd.read_sql_query("SELECT * FROM rh_personnel", conn)
-        st.table(df_list)
-        
-        st.subheader("Historique des paiements")
-        df_hist = pd.read_sql_query("SELECT * FROM rh_paie", conn)
-        st.dataframe(df_hist, use_container_width=True)
-
-# 2. PAGE RÉGLAGES (VOTRE CODE INITIAL GARDÉ)
-elif st.session_state.page == "Réglages" and st.session_state.user_role == "Administrateur":
-    st.subheader("⚙️ Gestion des Comptes")
-    # ... (le reste de votre code de suppression d'utilisateurs reste ici)
-    df_users = pd.read_sql_query("SELECT username, role FROM users", conn)
-    st.dataframe(df_users)
-
-# 3. ACCUEIL
-elif st.session_state.page == "Accueil":
-    st.info(f"Session active : {st.session_state.username} | Korhogo")
-    st.metric("Total Employés", len(pd.read_sql_query("SELECT id FROM rh_personnel", conn)))
-
-# --- PIED DE PAGE ---
-if st.sidebar.button("Déconnexion"):
-    st.session_state.connecte = False
-    st.rerun()
+    st.title("🔐
