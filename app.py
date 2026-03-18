@@ -3,7 +3,8 @@ import pandas as pd
 import sqlite3
 import hashlib
 from datetime import date
-from fpdf import FPDF 
+from fpdf import FPDF
+from io import BytesIO
 
 # --- CONFIGURATION ET STYLE ---
 st.set_page_config(page_title="LUN-AGRO PRO", layout="wide")
@@ -14,6 +15,7 @@ def crypter(mdp):
 # --- BASE DE DONNÉES ---
 DB_PATH = "data_ferme_v2.db"
 
+@st.cache_resource
 def initialiser_db():
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     c = conn.cursor()
@@ -42,8 +44,11 @@ if not st.session_state.connecte:
         cursor.execute('SELECT password, role FROM users WHERE username = ?', (u,))
         res = cursor.fetchone()
         if res and res[0] == crypter(p):
-            st.session_state.connecte, st.session_state.user_role = True, res[1]
+            st.session_state.connecte = True
+            st.session_state.user_role = res[1]
             st.rerun()
+        else:
+            st.error("Identifiant ou mot de passe incorrect")
     st.stop()
 
 # --- MENU DE NAVIGATION ---
@@ -105,7 +110,15 @@ elif page == "👥 RH & Paie":
                 pdf.cell(200, 10, f"Salaire : {salaire} FCFA", ln=True)
                 pdf.cell(200, 10, f"Date : {d_paie}", ln=True)
                 
-                st.download_button("📥 Télécharger PDF", pdf.output(dest='S'), f"Paie_{nom_emp}.pdf", "application/pdf")
+                # Correction : utiliser BytesIO pour le buffer
+                pdf_bytes = BytesIO(pdf.output(dest='S').encode('latin-1'))
+                
+                st.download_button(
+                    label="📥 Télécharger PDF",
+                    data=pdf_bytes,
+                    file_name=f"Paie_{nom_emp}.pdf",
+                    mime="application/pdf"
+                )
                 st.success("Paiement enregistré !")
 
 if st.sidebar.button("🚪 Déconnexion"):
